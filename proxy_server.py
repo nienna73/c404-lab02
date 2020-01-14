@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import socket, time, sys
+from multiprocessing import Process
+
 HOST = ""
 PORT = 8001
 BUFFER_SIZE = 1024
@@ -13,6 +15,16 @@ def get_remote_ip(host):
         sys.exit()
     print(f"IP address of {host} is {remote_ip}")
     return remote_ip
+
+
+def handle_request(addr, conn, proxy_end):
+    send_full_data = conn.recv(BUFFER_SIZE)
+    proxy_end.sendall(send_full_data)
+    proxy_end.shutdown(socket.SHUT_WR)
+
+    data = proxy_end.recv(BUFFER_SIZE)
+    # print(f"Sending data {data} to client")
+    conn.send(data)
 
 def main():
     host = 'www.google.com'
@@ -30,18 +42,14 @@ def main():
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as proxy_end:
                 print("Connecting to Google")
                 remote_ip = get_remote_ip(host)
-
                 proxy_end.connect((remote_ip, port))
 
-                send_full_data = conn.recv(BUFFER_SIZE)
-                proxy_end.sendall(send_full_data)
-                proxy_end.shutdown(socket.SHUT_WR)
-
-                data = proxy_end.recv(BUFFER_SIZE)
-                print(f"Sending data {data} to client")
-                conn.send(data)
-
+                p = Process(target=handle_request, args=(addr, conn, proxy_end))
+                p.daemon = True
+                p.start()
+                print("Started process ", p)
             conn.close()
+
 
 if __name__ == "__main__":
     main()
